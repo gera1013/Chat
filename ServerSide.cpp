@@ -13,7 +13,12 @@
 
 #include "new.pb.h"
 
-#define CLIENTS 8192
+#define CLIENTS    8192
+#define OK_CODE     200
+#define ERROR_CODE  500
+#define IDLE_TIME    30
+
+#define clrsrc() printf("\e[1;1H\e[2J")
 
 using namespace std;
 
@@ -43,24 +48,28 @@ void * requestListening(void * CD){
 
 	struct client* client_detail = (struct client*) CD;
 
+	//idle time
+	int ELAPSED = 0;
+	bool CHANGED = false;
+	
 	//client's index and socket
 	int index = client_detail -> index;
 	int client_socket = client_detail -> socket_ID;
 
 	//server printing of client IDs
-	printf("Client %d connected in socket number %d\n", index + 1, client_socket);
+	printf("[Client %d] 200 Connected in socket number %d\n", index + 1, client_socket);
 
 	//loop for attending calls
 	while(1){
 
 		//receive client request
 		chat::ClientPetition client_request;
-
+	
 		void* buffer;
 		buffer = malloc(1024);
 
-		//read and receive requests
-		int read = recv(client_socket, buffer, 1024, 0);
+		//read and receive requests 
+		int read = recv(client_socket, buffer, 1024, MSG_DONTWAIT);
 
 		//parse request from array
 		client_request.ParseFromArray(buffer, 1024);
@@ -72,9 +81,10 @@ void * requestListening(void * CD){
 		4. Mensajes
 		5. Informacion de un usuario en particular
 		*/
-
-		if(read > 0)
+		if(read > 1)
 		{
+			ELAPSED = 0;
+
 			if(client_request.option() == 2){
 				//unpack message communication
 				chat::ServerResponse response;
@@ -82,11 +92,11 @@ void * requestListening(void * CD){
 
 				//code and option
 				response.set_option(2);
-				response.set_code(200);
+				response.set_code(OK_CODE);
 
-				//user list
+				//user list	
 				user_list = response.mutable_connectedusers();
-
+				
 				int i;
 				for(i = 0; i < client_count; i++)
 				{
@@ -95,7 +105,7 @@ void * requestListening(void * CD){
 					{
 						chat::UserInfo* users;
 						users = user_list -> add_connectedusers();
-
+		
 						users -> set_username(clients[i].username);
 						users -> set_status(clients[i].status);
 						users -> set_ip(clients[i].ip);
@@ -105,149 +115,248 @@ void * requestListening(void * CD){
 				//user list to be sent
 				size_t size = response.ByteSizeLong();
 				buffer = malloc(size);
-
+	
 				response.SerializeToArray(buffer, size);
 				send(client_socket, buffer, size, 0);
+
+				cout << "[Client " << index + 1 << "] " << OK_CODE << " GET Connected users" << endl;
 
 				continue;
 
 			}
 			if(client_request.option() == 3){
-				// printf("POST Cambio de estado");
-
 				//	unpack change status
-				chat::ChangeStatus status:
+				chat::ChangeStatus status;
 
-				status = client_request.changestatus();
+				status = client_request.change();
 
 				//	string to char
-				chat char_user_status[status.status().size() + 1];
-				strcpy(char_user_status, status.status().c_str());
+				char char_status[status.status().size() + 1];
+				strcpy(char_status, status.status().c_str());
 
 				//	create server response
 				chat::ServerResponse response;
 				chat::ChangeStatus* tb_status;
 
-				//	code, option and serverMessage
+				//	send if valid
+				if(strcmp(char_status, "ACTIVO") == 0 | strcmp(char_status, "INACTIVO") == 0 | strcmp(char_status, "OCUPADO") == 0)
+				{
+					//	code, option, server message
+					response.set_code(OK_CODE);
+					response.set_servermessage("Status actualizado con exito");
+
+					strcpy(clients[index].status, char_status);
+					
+					cout << "[Client " << index + 1 << "] " << OK_CODE << " POST Status change" << endl;
+				}
+				else
+				{
+					//	code, option, server message
+					response.set_code(ERROR_CODE);
+
+					response.set_servermessage("El nuevo status no es valido");
+
+					strcpy(clients[index].status, char_status);
+
+					cout << "[Client " << index + 1 << "] " << ERROR_CODE << " POST Status change" << endl;
+				}
+
 				response.set_option(3);
-				response.set_code(200);
-				response.set_servermessage("El status se ha cambiado con éxito!");
 
-				//	ser mutable
-				tb_status = response.mutable_changestatus();
+				//	mutable
+				tb_status = response.mutable_change();
 
-				//	set values for status
+				//	set values
 				tb_status -> set_username(status.username());
 				tb_status -> set_status(status.status());
 
-				//	change status to be sent
+				//	send response
 				size_t size = response.ByteSizeLong();
 				buffer = malloc(size);
-
+	
 				response.SerializeToArray(buffer, size);
 				send(client_socket, buffer, size, 0);
 
 				continue;
-
+	
 			}
 			if(client_request.option() == 4){
 				//unpack message communication
 				chat::MessageCommunication message;
-
+	
 				message = client_request.messagecommunication();
-
+	
 				//string to char
 				char char_recipient[message.recipient().size() + 1];
 				strcpy(char_recipient, message.recipient().c_str());
-
+	
 				//create server responser
 				chat::ServerResponse response;
 				chat::MessageCommunication* tb_message;
-
+	
 				//code and option
 				response.set_option(4);
-				response.set_code(200);
-
+				response.set_code(OK_CODE);
+	
 				//set mutable
 				tb_message = response.mutable_messagecommunication();
-
+	
 				//set values for message
 				tb_message -> set_sender(message.sender());
 				tb_message -> set_recipient(message.recipient());
 				tb_message -> set_message(message.message());
-
+	
 				//message communication to be sent
 				size_t size = response.ByteSizeLong();
 				buffer = malloc(size);
-
+	
 				response.SerializeToArray(buffer, size);
-
+	
 				bool sent = false;
 				int i;
 
 				//send to every connected client
 				for(i = 0; i < client_count; i++)
-				{
+				{	
 					if(strcmp("everyone", char_recipient) == 0 | strcmp(char_recipient, clients[i].username) == 0){
 						send(clients[i].socket_ID, buffer, size, 0);
 						sent = true;
 					}
 				}
+
+				if(!sent)
+				{
+					cout << "[Client " << index + 1 << "] " << ERROR_CODE << " POST Message communication" << endl;
+					char msg[] = "No existen usuarios con el nombre ";
+					strcat(msg, char_recipient);
+
+					response.set_code(ERROR_CODE);
+					response.set_servermessage(msg);
+
+					size_t size = response.ByteSizeLong();
+					buffer = malloc(size);
+	
+					response.SerializeToArray(buffer, size);
+					send(client_socket, buffer, size, 0);
+				}
+				else
+				{
+					cout << "[Client " << index + 1 << "] " << OK_CODE << " POST Message communication" << endl;
+					if(strcmp("everyone", char_recipient) != 0)
+					{
+						send(client_socket, buffer, size, 0);
+					}
+				}
 			}
 			if(client_request.option() == 5){
-				// printf("GET Usuario especifico");
-
 				//	unpack user request
 				chat::UserRequest user;
 
-				user = client_request.userrequest();
+				user = client_request.users();
 
 				//	string to char
-				char char_username[user.username().size() + 1];
-				strcpy(chat_username, user.username().c_str());
+				char char_username[user.user().size() + 1];
+				strcpy(char_username, user.user().c_str());
 
-				//	 create Server Response
+				//	server response
 				chat::ServerResponse response;
-				chat::UserInfoRequest* user_info;
+				chat::UserInfo* user_info;
 
-				//	option and code
 				response.set_option(5);
-				response.set_code(200);
 
-				//	set mutable
-				user_info = response.mutable_connectedusers();
+				user_info = response.mutable_userinforesponse();
 
 				int i;
+				bool found = false;
 				for(i = 0; i < client_count; i++)
 				{
-						if(strcmp(char_username, clients[i].username) == 0) {
-							chat::UserInfo* user_details;
+					//fill user list with each user connected
+					if(strcmp(clients[i].username, char_username) == 0)
+					{
+						user_info -> set_username(clients[i].username);
+						user_info -> set_status(clients[i].status);
+						user_info -> set_ip(clients[i].ip);
 
-							user_details = user_info -> add_connectedusers();
+						response.set_code(OK_CODE);
+						found = true;
 
-							user_details -> set_username(clients[i].username);
-							user_details -> set_status(clients[i].status);
-							user_details -> set_ip(clients[i].ip);
-						}
+						cout << "[Client " << index + 1 << "] " << OK_CODE << " GET User information" << endl;
+					}
+				}
+
+				if(!found)
+				{
+					response.set_code(ERROR_CODE);
+
+					char msg[] = "No existen usuarios con el nombre ";
+					strcat(msg, char_username);
+
+					response.set_servermessage(msg);
+
+					cout << "[Client " << index + 1 << "] " << ERROR_CODE << " GET User information" << endl;
 				}
 
 				size_t size = response.ByteSizeLong();
 				buffer = malloc(size);
-
+	
 				response.SerializeToArray(buffer, size);
 				send(client_socket, buffer, size, 0);
 
 				continue;
-
+	
 			}
 		}
 		else
 		{
-			//clear the user disconnected index
-			memset(&clients[index], 0, sizeof(clients[index]));
-			printf("Client %d disconnected\n", index + 1);
+			if(read == 0)
+			{
+				//clear the user disconnected index
+				memset(&clients[index], 0, sizeof(clients[index]));
+				printf("Client %d disconnected\n", index + 1);
+			
+				return NULL;
+			}
+			if(read == -1)
+			{
+				sleep(1);
+				
+				if(ELAPSED < IDLE_TIME)
+				{
+					ELAPSED = ELAPSED + 1;
+				}
+				else
+				{
+					if(!CHANGED)
+					{
+						cout << "Client " << index +1 << " has gone idle" << endl;
+						strcpy(clients[index].status, "INACTIVO");
 
-			return NULL;
+						chat::ServerResponse response;
+						chat::ChangeStatus* tb_status;
+
+						response.set_code(OK_CODE);
+						response.set_servermessage("Status actualizado con exito");
+
+						response.set_option(3);
+
+						//	mutable
+						tb_status = response.mutable_change();
+
+						//	set values
+						tb_status -> set_username(clients[index].username);
+						tb_status -> set_status("INACTIVO");
+						
+
+						size_t size = response.ByteSizeLong();
+						buffer = malloc(size);
+	
+						response.SerializeToArray(buffer, size);
+						send(client_socket, buffer, size, 0);
+
+						CHANGED = true;
+					}
+				}
+			}
 		}
 	}
 
@@ -260,6 +369,7 @@ int main(int argc, char* argv[]){
 	//good protobuf practices
 	GOOGLE_PROTOBUF_VERIFY_VERSION;
 
+	clrsrc();
 
 	//variables
 	int i;
@@ -290,10 +400,10 @@ int main(int argc, char* argv[]){
 	//loop for listening client connections
 	while(1){
 		/* USER REGISTRATION */
-		// accept client connection
+		// accept client connection 
 		clients[client_count].socket_ID = accept(server_socket, (struct sockaddr*) &clients[client_count].client_addr, &clients[client_count].len);
 		clients[client_count].index = client_count;
-
+	
 		//protobuf classes objects
 		chat::UserRegistration user;
 		chat::ClientPetition client_request;
@@ -333,7 +443,7 @@ int main(int argc, char* argv[]){
 			//set error response
 			response.set_code(500);
 			response.set_servermessage("Ya existe un usuario con ese nombre, intente con uno nuevo\n");
-
+			printf("Failed to register user with username '%s'\n", c);		
 		}
 		else
 		{
@@ -346,7 +456,7 @@ int main(int argc, char* argv[]){
 			strcpy(clients[i].ip, user.ip().c_str());
 			strcpy(clients[i].status, "ACTIVO");
 		}
-
+		
 		//send server response
 		size = response.ByteSizeLong();
 		buffer = malloc(size);
@@ -360,7 +470,7 @@ int main(int argc, char* argv[]){
 			//increment user count
 			client_count ++;
 		}
-
+		
 		/* ----------------- */
 	}
 

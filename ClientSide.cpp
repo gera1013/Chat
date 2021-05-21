@@ -14,17 +14,45 @@
 
 #include "new.pb.h"
 
+#define clrsrc() printf("\e[1;1H\e[2J")
+#define clrln()  printf("\33[2K\r")
+
 using namespace std;
+
+//global username declaration
+char* USERNAME;
+char STATUS[] = "ACTIVO";
+
+//input line sim
+void print_namestatus()
+{
+	cout << "(@" << USERNAME << " " << STATUS << "): ";
+}
+
+//print help menu funtion
+void print_help()
+{
+	printf("\nEstos son los comandos utilizados dentro de la sala:\n");
+	printf("  * Envio de mensajes:         MESSAGE [USERNAME] [MENSAJE]\n");
+	printf("  * Informacion de usuarios:   CONNECTED\n");
+	printf("  * Informacion de un usuario: INFO [USERNAME]\n");
+	printf("  * Cambio de status:          STATUS [NEW STATUS]\n");
+	printf("  * Informacion de comandos:   HELP\n");
+	printf("  * Salida del chat:           EXIT\n");
+
+	printf("\nUtilice el comando 'HELP' para volver a ver la informacion acerca de los demas comandos\n\n");
+}
+
 
 //funcion que realiza el thread para recibir comunicaciones del servidor
 void * listenResponses(void * socket_ID){
-
+	
 	int socket = *((int *) socket_ID);
 
 	while(1){
 		//receive client request
 		chat::ServerResponse server_response;
-
+	
 		void* buffer;
 		buffer = malloc(1024);
 
@@ -41,38 +69,56 @@ void * listenResponses(void * socket_ID){
 		4. Mensajes
 		5. Informacion de un usuario en particulas
 		*/
-
 		if(server_response.option() == 2){
 			//unpack the user list received
 			chat::ConnectedUsersResponse user_list;
-
+			
 			//set user list from response
 			user_list = server_response.connectedusers();
-
+			
 			//print the user list contents
-			int i;
-			cout << "\nLISTADO DE USUARIOS CONECTADOS";
-			for(i = 0; i < user_list.connectedusers_size(); i++)
+			if(server_response.code() == 200)
 			{
-				chat::UserInfo user = user_list.connectedusers(i);
+				int i;
 
-				cout << "\n* Username -> " << user.username() << endl;
-				cout << "* Status   -> " << user.status() << endl;
-				cout << "* IP       -> " << user.ip() << endl;
+				cout << "\nLISTADO DE USUARIOS CONECTADOS\n";
+
+				for(i = 0; i < user_list.connectedusers_size(); i++)
+				{
+					chat::UserInfo user = user_list.connectedusers(i);
+	
+					cout << "* Username -> " << user.username() << endl;
+					cout << "* Status   -> " << user.status() << endl << endl;
+				}
+			}
+			else
+			{
+				cout << "\n" << server_response.servermessage() << endl << endl;
 			}
 
 			continue;
 
 		}
 		if(server_response.option() == 3){
-			// printf("POST Cambio de estado");
-
+			
 			chat::ChangeStatus status;
 
-			status = server_response.changestatus();
+			status = server_response.change();
 
-			cout << "CAMBIO DE STATUS " << status.username() << ": " << status.status() << endl;
+			if(server_response.code() == 200)
+			{
+				cout << "Cambio de status: " << status.status() << endl;
 
+				char char_new_status[status.status().size() + 1];
+				strcpy(char_new_status, status.status().c_str());
+
+				strcpy(STATUS, char_new_status);
+			}
+			else
+			{
+				cout << "Error en el cambio de status\n" << server_response.servermessage() << endl;
+			}
+		
 			continue;
 
 		}
@@ -87,38 +133,63 @@ void * listenResponses(void * socket_ID){
 			char char_recipient[message.recipient().size() + 1];
 			strcpy(char_recipient, message.recipient().c_str());
 
-			//print del mensaje segun sender
-			if(strcmp(char_recipient, "everyone") == 0)
+			char char_sender[message.sender().size() + 1];
+			strcpy(char_sender, message.sender().c_str());
+
+			if(server_response.code() == 200)
 			{
-				cout << "[TODOS] " << message.sender() << ":" << message.message() << endl;
+				clrln();
+
+				//print del mensaje segun sender
+				if(strcmp(char_recipient, "everyone") == 0)
+				{
+					if(strcmp(char_sender, USERNAME) == 0)
+					{
+						cout << "[GENERAL] YOU:" << message.message() << endl;
+					}
+					else
+					{
+						cout << "[GENERAL] " << message.sender() << ":" << message.message() << endl;
+					}
+				}
+				else
+				{
+					if(strcmp(char_recipient, USERNAME) == 0)
+					{
+						cout << "[PRIVADO - " << message.sender() << "] " << message.sender() << ":" << message.message() << endl;
+					}
+					else
+					{
+						cout << "[PRIVADO - " << message.recipient() << "] YOU:" << message.message() << endl;
+					}
+				}
+				
+				continue;
 			}
 			else
 			{
-				cout << "[PRIVADO] " << message.sender() << ":" << message.message() << endl;
+				cout <<  "\n" << server_response.servermessage() << endl << endl;
 			}
-
-			continue;
 
 		}
 		if(server_response.option() == 5){
-			// printf("GET Usuario especifico");
+			chat::UserInfo user;
 
-			chat::UserInfoRequest user;
+			user = server_response.userinforesponse();
 
-			user = server_response.userrequest();
+			cout << "\n Informacion de Usuario" << endl;
 
-			cout << "\nINFORMACIÓN DE USUARIO";
-
-			int i;
-			for(i = 0; i < user.connectedusers_size(); i++)
+			if(server_response.code() == 200)
 			{
-				chat::UserInfo user_detail = user_info.connectedusers(i);
 
-				cout << "\n* Username -> " << user_detail.username() << endl;
-				cout << "* Status 		-> " << user_detail.status() << endl;
-				cout << "* IP					-> " << user_detail.ip() << endl;
+				cout << "* Username -> " << user.username() << endl;
+				cout << "* Status   -> " << user.status() << endl;
+				cout << "* IP       -> " << user.ip() << endl << endl;
 			}
-
+			else
+			{
+				cout <<  "\n" << server_response.servermessage() << endl << endl;
+			}
 			continue;
 
 		}
@@ -126,16 +197,20 @@ void * listenResponses(void * socket_ID){
 
 }
 
+
 //Main function para el programa
 int main(int argc, char* argv[]){
 
+	clrsrc();
+
 	//good protobuf practices
 	GOOGLE_PROTOBUF_VERIFY_VERSION;
-
+	
 	//get user data from command line
-	char* USERNAME = argv[1];
+	USERNAME = argv[1];
 	char* IP = argv[2];
-	uint16_t PORT = atoi(argv[3]);
+	uint16_t PORT = atoi(argv[3]);	
+	strcpy(STATUS, "ACTIVO");
 
 	//var
 	void *buffer;
@@ -201,9 +276,9 @@ int main(int argc, char* argv[]){
 	//exit if failure continue if everything OK
 	if(response.code() == 200)
 	{
-
-		printf("Conexion establecida ............\n");
-
+		
+		printf("Estableciendo conexion............\n");
+	
 		//pthread for receiving server responses
 		pthread_t thread;
 		pthread_create(&thread, NULL, listenResponses, (void *) &client_socket );
@@ -216,6 +291,14 @@ int main(int argc, char* argv[]){
 	}
 	// --------------- //
 
+	sleep(1);
+	clrsrc();
+
+	//--------------------------------------------//
+	printf("Bienvenido al CHAT ROOM\n");
+
+	print_help();
+	//--------------------------------------------//
 
 	//loop for client requests
 	while(1){
@@ -225,8 +308,13 @@ int main(int argc, char* argv[]){
 
 		//client input
 		char input[1024];
-		scanf("%s",input);
+		
+		sleep(1);
 
+		clrln();
+		print_namestatus();
+
+		scanf(" %s", input);
 
 		//options for client requests
 		/*
@@ -235,8 +323,6 @@ int main(int argc, char* argv[]){
 		4. MESSAGE   - POST Mensajes privados y broadcast
 		5. INFO      - GET  Informacion de un usuario en particular
 		*/
-
-		//	GET ALL CONNECTED USERS
 		if(strcmp(input, "CONNECTED") == 0){
 			//protobuf user request creation
 			chat::UserRequest* request;
@@ -249,28 +335,22 @@ int main(int argc, char* argv[]){
 			request -> set_user("everyone");
 
 		}
-
-		//	POST A CHANGE OD STATUS
-		if(strcmp(input, "STATE") == 0){
-			// printf("POST Cambio de estado actual");
-
+		if(strcmp(input, "STATUS") == 0){
 			//	protobuf change status object
 			chat::ChangeStatus* status;
 
 			//	set object and mutable change status
 			client_request.set_option(3);
-			status = client_request.mutable_changestatus();
+			status = client_request.mutable_change();
 
 			//	set username
 			status -> set_username(USERNAME);
 
-			//	read from input and set status to be sent
-			printf("Ingrese su nuevo status");
-			scanf("%s", input);
+			//	read from input and set status
+			scanf("%s%*c", input);
 			status -> set_status(input);
-		}
 
-		//	POST A PRIVATE OR A BROADCAST MESSAGE
+		}
 		if(strcmp(input, "MESSAGE") == 0){
 			//protobuf message communication object
 			chat::MessageCommunication* message;
@@ -281,35 +361,32 @@ int main(int argc, char* argv[]){
 
 			//set username
 			message -> set_sender(USERNAME);
-
+			
 			//read from input and set recipient
 			scanf("%s", input);
 			message -> set_recipient(input);
-
+			
 			//read from input and set message to be sent
 			scanf("%[^\n]s", input);
 			message -> set_message(input);
 		}
-
-		//	GET A USER'S INFO
 		if(strcmp(input, "INFO") == 0){
-			// printf("GET Usuario especifico conectado");
-			//send(client_socket, input, 1024, 0);
-
 			//	protobuf user request object
 			chat::UserRequest* request;
 
 			//	set option and users
 			client_request.set_option(5);
-			request = mutable_request.mutable_users();
+			request = client_request.mutable_users();
 
-			//	read from input and set username to be sent
-			printf("Ingrese el usuario del que desea obtener información");
+			//	set username to be sent
 			scanf("%s", input);
-
 			request -> set_user(input);
-		}
 
+		}
+		if(strcmp(input, "HELP") == 0){
+			print_help();
+
+		}
 		if(strcmp(input, "EXIT") == 0){
 			//close socket
 			printf("Conexion terminada ............\n");
@@ -319,8 +396,8 @@ int main(int argc, char* argv[]){
 
 		}
 
-
-		//serialize the client request
+		
+		//serialize the client request 
 		size_t size = client_request.ByteSizeLong();
 		void *buffer = malloc(size);
 
