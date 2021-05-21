@@ -1,5 +1,5 @@
 # Chat
-Chat en C implementando sockets y protobuf
+Chat en C++ implementando sockets y protobuf
 
 - Luis Pedro Cuéllar 18220
 - Gerardo Méndez Alvarez 18239
