@@ -4,9 +4,16 @@ Implementación de chat cliente/servidor en C++ utilizando sockets y protobuf
 - Luis Pedro Cuéllar 18220
 - Gerardo Méndez Alvarez 18239
 ### Ejecución
+Protobuf
+<pre>
+protoc new.proto --cpp_out=./
+</pre>
 En terminal:
 <pre>
-c++ -std=c++11 ChatServer.cpp new.pb.cc -o [object_file_name] `pkg-config --cflags --libs protobuf`
+c++ -std=c++11 ClientSide.cpp new.pb.cc -o [object_file_name] `pkg-config --cflags --libs protobuf`
+</pre>
+<pre>
+c++ -std=c++11 ServerSide.cpp new.pb.cc -o [object_file_name] `pkg-config --cflags --libs protobuf`
 </pre>
 
 Luego con cada ejecutable:
