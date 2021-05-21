@@ -1,0 +1,96 @@
+syntax = "proto3";
+
+package chat;
+
+// REGISTRO DE USUARIOS
+message UserRegistration {
+    optional string username = 1;
+    optional string ip = 2;
+}
+
+
+// INFORMACION DEL USUARIO
+message UserInfo {
+    optional string username = 1;
+    optional string status = 2;
+    optional string ip = 3;
+}
+
+
+// SOLICITAR INFORMACION
+// user: (username || everyone)
+message UserRequest {
+    optional string user = 1;
+}
+
+
+// ENVIADO POR EL SERVIDOR
+message ConnectedUsersResponse {
+    repeated UserInfo connectedUsers = 1;
+}
+
+
+// CAMBIAR DE ESTADO
+// POSIBLES STATUS
+// activo, inactivo, ocupado
+message ChangeStatus {
+    optional string username = 1;
+    optional string status = 2;
+}
+
+
+// ENVIO DE MENSAJES (DIRECTOS || BROADCAST)
+// recipient: (username || everyone)
+// sender: username del remitente
+message MessageCommunication {
+    optional string message = 1;
+    optional string recipient = 2; 
+    optional string sender = 3; 
+}
+
+
+// option 1: Registro de Usuarios
+// option 2: Usuarios Conectados
+// option 3: Cambio de Estado
+// option 4: Mensajes
+// option 5: Informacion de un usuario en particular
+// PARA TODOS LOS USUARIOS CONECTADOS MANDAR UN UserRequest con everyone
+// PARA INFO DE UN USUARIO MANDAR UN UserRequest con el username
+message ClientPetition {
+    optional int32 option = 1;
+
+    optional UserRegistration registration = 2;
+
+    optional UserRequest users = 3;
+
+    optional ChangeStatus change = 4;
+
+    optional MessageCommunication messageCommunication = 5;
+}
+
+
+// option 1: Registro de Usuarios
+// option 2: Usuarios Conectados
+// option 3: Cambio de Estado
+// option 4: Mensajes
+// option 5: Informacion de un usuario en particular
+// codigo 200: Exito
+// codigo 500: Fallo
+// EN RESPUESTA A UNA SOLICITUD DEL CLIENTE POR EJEMPLO: REGISTRO DE USUARIOS
+// UNICAMENTE RETORNA OPCION, CODIGO Y MENSAJE DEL SERVIDOR
+// PARA SABER SI LA SOLICITUD FUE EXITOSA O FALLO HORRIBLE EL SERVIDOR
+message ServerResponse {
+    optional int32 option = 1;
+
+    optional int32 code = 2;
+
+    optional string serverMessage = 3;
+
+    optional ConnectedUsersResponse connectedUsers = 4;
+
+    optional MessageCommunication messageCommunication = 5;
+
+    optional UserInfo userInfoResponse = 6;
+
+    optional ChangeStatus change = 7;
+}
