@@ -84,6 +84,7 @@ void * requestListening(void * CD){
 		if(read > 1)
 		{
 			ELAPSED = 0;
+			CHANGED = false;
 
 			if(client_request.option() == 2){
 				//unpack message communication
