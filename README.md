@@ -1,5 +1,5 @@
 # Chat
-Implementación de chat cliente/servidor en C++, utilizando sockets y protobuf
+Implementación de chat cliente/servidor en C++ utilizando sockets y protobuf
 
 - Luis Pedro Cuéllar 18220
 - Gerardo Méndez Alvarez 18239
