@@ -177,10 +177,9 @@ void * listenResponses(void * socket_ID){
 
 			user = server_response.userinforesponse();
 
-			cout << "\n Informacion de Usuario" << endl;
-
 			if(server_response.code() == 200)
 			{
+				cout << "\n Informacion de Usuario" << endl;
 
 				cout << "* Username -> " << user.username() << endl;
 				cout << "* Status   -> " << user.status() << endl;
